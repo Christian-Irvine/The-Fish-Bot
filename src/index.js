@@ -1,7 +1,9 @@
 require('dotenv').config();
-const { Client, IntentsBitField } = require('discord.js');
+const { Client, IntentsBitField, channelLink } = require('discord.js');
+const tmi = require('tmi.js');
 
-const client = new Client({
+// Discord Code
+const discordClient = new Client({
     intents: [
         IntentsBitField.Flags.Guilds,
         IntentsBitField.Flags.GuildMembers,
@@ -10,16 +12,16 @@ const client = new Client({
     ],
 });
 
-client.on('ready', (c) => {
-    console.log(`${c.user.tag} is ready to swim!`);
+discordClient.on('ready', (c) => {
+    console.log(`Discord: ${c.user.tag} is ready to swim!`);
 });
 
-client.on('messageCreate', (msg) => {
+discordClient.on('messageCreate', (msg) => {
     if (msg.author.bot) return;
     msg.reply("Howdy partner");
 });
 
-client.on('interactionCreate', (interaction) => {
+discordClient.on('interactionCreate', (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     
     switch (interaction.commandName) {
@@ -40,4 +42,61 @@ client.on('interactionCreate', (interaction) => {
     
 });
 
-client.login(process.env.TOKEN);
+discordClient.login(process.env.DISCORD_TOKEN);
+
+// Twitch Code
+const twitchOptions = {
+    identity: {
+      username: process.env.TWITCH_BOT_USERNAME,
+      password: `oauth:${process.env.TWITCH_OAUTH_TOKEN}`
+    },
+    channels: [
+      process.env.TWITCH_CHANNEL_NAME
+    ]
+  };
+  
+  // Create a client with our options
+  const twitchClient = new tmi.client(twitchOptions);
+  
+  // Register our event handlers (defined below)
+  twitchClient.on('message', onMessageHandler);
+  twitchClient.on('connected', onConnectedHandler);
+  
+  // Connect to Twitch:
+  twitchClient.connect();
+  
+  // Called every time a message comes in
+  function onMessageHandler (target, context, msg, self) {
+    if (self) { return; } // Ignore messages from the bot
+  
+    // Remove whitespace from chat message
+    const trimmedMessage = msg.trim();
+
+    sendDiscordTwitchChatMessage(context['display-name'], trimmedMessage)
+
+    // If the command is known, let's execute it
+    if (trimmedMessage === '!dice') {
+      const num = rollDice();
+      twitchClient.say(target, `You rolled a ${num}`);
+      console.log(`* Executed ${trimmedMessage} command`);
+    } else {
+      //console.log(`* Unknown command ${commandName}`);
+    }
+  }
+
+  // Function called when the "dice" command is issued
+  const rollDice = () => {
+    const sides = 6;
+    return Math.floor(Math.random() * sides) + 1;
+  }
+  
+  // Called every time the bot connects to Twitch chat
+  function onConnectedHandler (addr, port) {
+    console.log(`* Connected to ${addr}:${port}`);
+  }
+
+  const sendDiscordTwitchChatMessage = (sender, message) => {
+    fullMessage = `**${sender}**: ${message}`
+
+    chatChannel = discordClient.channels.cache.get('1248844932203155527').send(fullMessage);
+  }
